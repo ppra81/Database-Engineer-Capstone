@@ -1,0 +1,24 @@
+# Create triggers for reacting to changes
+cursor.execute('''
+CREATE TRIGGER IF NOT EXISTS after_insert_order
+AFTER INSERT ON Orders
+BEGIN
+    INSERT INTO OrderLog (order_id, action) VALUES (NEW.id, 'INSERT');
+END;
+''')
+
+cursor.execute('''
+CREATE TRIGGER IF NOT EXISTS after_update_order
+AFTER UPDATE ON Orders
+BEGIN
+    INSERT INTO OrderLog (order_id, action) VALUES (NEW.id, 'UPDATE');
+END;
+''')
+
+cursor.execute('''
+CREATE TRIGGER IF NOT EXISTS after_delete_order
+AFTER DELETE ON Orders
+BEGIN
+    INSERT INTO OrderLog (order_id, action) VALUES (OLD.id, 'DELETE');
+END;
+''')
