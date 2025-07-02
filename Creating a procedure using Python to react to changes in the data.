@@ -22,3 +22,109 @@ BEGIN
     INSERT INTO OrderLog (order_id, action) VALUES (OLD.id, 'DELETE');
 END;
 ''')
+
+# Insert unique cuisines
+unique_cuisines = df['Cuisine Name'].unique()
+for cuisine in unique_cuisines:
+    cursor.execute('INSERT OR IGNORE INTO Cuisines (name) VALUES (?)', (cuisine,))
+
+# Get cuisine IDs
+cuisine_id_map = {row[1]: row[0] for row in cursor.execute('SELECT id, name FROM Cuisines').fetchall()}
+
+# Insert unique courses
+unique_courses = df[['Course Name', 'Cuisine Name']].drop_duplicates()
+for _, row in unique_courses.iterrows():
+    course_name = row['Course Name']
+    cuisine_name = row['Cuisine Name']
+    cuisine_id = cuisine_id_map[cuisine_name]
+    cursor.execute('INSERT OR IGNORE INTO Courses (name, cuisine_id) VALUES (?, ?)', (course_name, cuisine_id))
+
+# Get course IDs
+course_id_map = {}
+for row in cursor.execute('SELECT id, name, cuisine_id FROM Courses').fetchall():
+    course_id_map[(row[1], row[2])] = row[0]
+
+# Insert unique starters
+unique_starters = df['Starter Name'].unique()
+for starter in unique_starters:
+    cursor.execute('INSERT OR IGNORE INTO Starters (name) VALUES (?)', (starter,))
+
+# Get starter IDs
+starter_id_map = {row[1]: row[0] for row in cursor.execute('SELECT id, name FROM Starters').fetchall()}
+
+# Insert unique desserts
+unique_desserts = df['Desert Name'].unique()
+for dessert in unique_desserts:
+    cursor.execute('INSERT OR IGNORE INTO Desserts (name) VALUES (?)', (dessert,))
+
+dessert_id_map = {row[1]: row[0] for row in cursor.execute('SELECT id, name FROM Desserts').fetchall()}
+
+# Insert unique drinks
+unique_drinks = df['Drink'].unique()
+for drink in unique_drinks:
+    cursor.execute('INSERT OR IGNORE INTO Drinks (name) VALUES (?)', (drink,))
+
+drink_id_map = {row[1]: row[0] for row in cursor.execute('SELECT id, name FROM Drinks').fetchall()}
+
+# Insert unique sides
+unique_sides = df['Sides'].unique()
+for side in unique_sides:
+    cursor.execute('INSERT OR IGNORE INTO Sides (name) VALUES (?)', (side,))
+
+side_id_map = {row[1]: row[0] for row in cursor.execute('SELECT id, name FROM Sides').fetchall()}
+
+# Insert customers
+unique_customers = df[['Customer ID', 'Customer Name', 'City', 'Country', 'Postal Code', 'Country Code']].drop_duplicates(subset='Customer ID')
+for _, row in unique_customers.iterrows():
+    cursor.execute('''
+    INSERT OR IGNORE INTO Customers (id, name, city, country, postal_code, country_code)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ''', (row['Customer ID'], row['Customer Name'], row['City'], row['Country'], row['Postal Code'], row['Country Code']))
+
+# Insert orders
+for _, row in df.iterrows():
+    course_name = row['Course Name']
+    cuisine_name = row['Cuisine Name']
+    cuisine_id = cuisine_id_map[cuisine_name]
+    course_id = course_id_map.get((course_name, cuisine_id))
+    if course_id is None:
+        print(f"Course not found: {course_name} in cuisine {cuisine_name}")
+        continue
+
+    starter_id = starter_id_map.get(row['Starter Name'])
+    dessert_id = dessert_id_map.get(row['Desert Name'])
+    drink_id = drink_id_map.get(row['Drink'])
+    side_id = side_id_map.get(row['Sides'])
+
+    cursor.execute('''
+    INSERT INTO Orders (id, order_date, delivery_date, customer_id, course_id, starter_id, dessert_id, drink_id, side_id, quantity, cost, sales, discount, delivery_cost)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (row['Order ID'], row['Order Date'], row['Delivery Date'], row['Customer ID'], course_id, starter_id, dessert_id, drink_id, side_id, row['Quantity'], row['Cost'], row['Sales'], row['Discount'], row['Delivery Cost']))
+
+# Commit changes
+conn.commit()
+
+# Close connection
+conn.close()
+
+# Example Python client to connect and query
+conn = sqlite3.connect('little_lemon.db')
+cursor = conn.cursor()
+cursor.execute('SELECT * FROM Orders LIMIT 5')
+rows = cursor.fetchall()
+for row in rows:
+    print(row)
+conn.close()
+
+# Example Python script to monitor changes
+from datetime import datetime
+conn = sqlite3.connect('little_lemon.db')
+cursor = conn.cursor()
+cursor.execute('''
+SELECT * FROM OrderLog
+WHERE timestamp >= ?
+''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+logs = cursor.fetchall()
+for log in logs:
+    print(f"Order {log[1]} was {log[2]} at {log[3]}")
+conn.close()
